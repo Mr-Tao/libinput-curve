@@ -107,6 +107,11 @@ fail because it cannot be translated without broadening the persistent match.
 The complete schema and curve semantics are documented in
 [docs/configuration.md](docs/configuration.md).
 
+Wheel acceleration, event resolution, and application-side visual
+interpolation are separate mechanisms. See
+[docs/scrolling.md](docs/scrolling.md) before trying to make a detented mouse
+wheel behave like a touchpad.
+
 ## Workflow
 
 Start read-only:

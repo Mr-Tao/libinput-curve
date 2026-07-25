@@ -67,6 +67,31 @@ physical samples from a curve. A custom curve can reduce the first output step
 and accelerate later events, while a toolkit may still render each delivered
 increment discretely.
 
+Measure rather than infer the second and fourth layers:
+
+```console
+sudo evtest /dev/input/eventX
+xinput test-xi2 --root DEVICE_ID
+```
+
+On `REL_WHEEL_HI_RES`, `120` is one logical detent. Fractional values such as
+`40` or `60` demonstrate useful sub-detent information. Merely advertising
+the axis, enabling `libinput High Resolution Wheel Scroll Enabled`, or seeing
+an XI2 smooth-scroll valuator does not prove that fractional samples exist.
+
+Likewise, "smooth" at the event-protocol layer means fractional-capable, not
+visually animated. Browsers may interpolate each wheel delta over several
+frames while a GTK widget directly updates its adjustment. The environment
+variable that enables Firefox's XInput2 path does not enable animation in GTK
+applications.
+
+`libinput Scrolling Pixel Distance` is not a wheel-detent-size control. It
+applies to continuous two-finger, edge, or button scrolling.
+
+See the project-level
+[wheel scrolling guide](../../../../docs/scrolling.md) for the full boundary
+and upstream references.
+
 ## Experiment discipline
 
 - Capture the current JSON plan.
