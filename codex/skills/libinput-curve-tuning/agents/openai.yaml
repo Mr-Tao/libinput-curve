@@ -1,0 +1,4 @@
+interface:
+  display_name: "Libinput Curve Tuning"
+  short_description: "Inspect, tune, and safely apply libinput custom curves"
+  default_prompt: "Diagnose this pointing or scrolling behavior, validate the matching libinput custom curve, and make the narrowest safe change."

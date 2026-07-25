@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+
+[Unit]
+Description=Keep custom libinput curves applied after XInput hotplug
+Documentation=https://github.com/Mr-Tao/libinput-curve
+After=graphical-session.target
+PartOf=graphical-session.target
+ConditionEnvironment=XDG_SESSION_TYPE=x11
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/libinput-curve watch
+Restart=on-failure
+RestartSec=3s
+
+CapabilityBoundingSet=
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=read-only
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+ReadWritePaths=%t
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=graphical-session.target
