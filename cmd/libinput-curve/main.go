@@ -25,7 +25,7 @@ import (
 	"github.com/Mr-Tao/libinput-curve/internal/xorg"
 )
 
-const version = "0.1.0-dev"
+var version = "0.1.0-dev"
 
 const (
 	exitOK          = 0
