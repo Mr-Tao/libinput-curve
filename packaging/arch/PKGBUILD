@@ -36,6 +36,9 @@ build() {
   export CGO_CFLAGS="${CFLAGS}"
   export CGO_CXXFLAGS="${CXXFLAGS}"
   export CGO_LDFLAGS="${LDFLAGS}"
+  export GOCACHE="$srcdir/go-build-cache"
+  export GOMODCACHE="$srcdir/go-mod-cache"
+  export GO111MODULE=on
   export GOFLAGS='-buildmode=pie -trimpath -mod=readonly -modcacherw -buildvcs=false'
 
   go build \
@@ -46,6 +49,11 @@ build() {
 
 check() {
   cd "$pkgname"
+
+  export GOCACHE="$srcdir/go-build-cache"
+  export GOMODCACHE="$srcdir/go-mod-cache"
+  export GO111MODULE=on
+
   go test ./...
 }
 
