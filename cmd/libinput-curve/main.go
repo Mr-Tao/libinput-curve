@@ -87,6 +87,8 @@ func (app application) run(args []string) int {
 		return app.runWatch(args[1:])
 	case "render-xorg":
 		return app.runRenderXorg(args[1:])
+	case "completion":
+		return app.runCompletion(args[1:])
 	case "help", "-h", "--help":
 		app.usage()
 		return exitOK
@@ -449,19 +451,15 @@ func (app application) acquireMutationLock() (*os.File, error) {
 }
 
 func (app application) usage() {
-	fmt.Fprintln(app.stderr, `usage: libinput-curve COMMAND [OPTIONS]
-
-Commands:
-  validate      Validate a strict JSON configuration
-  devices       List Xorg libinput pointer devices
-  plan          Show property changes without applying them
-  status        Check whether matched devices are in sync
-  apply         Apply a preflighted plan and verify the result
-  watch         Reapply and verify profiles after XInput hotplug
-  render-xorg   Render persistent xorg.conf.d InputClass sections
-  version       Print the version
-
-Use "libinput-curve COMMAND -h" for command-specific flags.`)
+	fmt.Fprintln(app.stderr, "usage: libinput-curve COMMAND [OPTIONS]")
+	fmt.Fprintln(app.stderr, "\nCommands:")
+	for _, command := range completionCommands {
+		fmt.Fprintf(app.stderr, "  %-13s %s\n", command.name, command.description)
+	}
+	fmt.Fprintln(
+		app.stderr,
+		"\nUse \"libinput-curve COMMAND -h\" for command-specific flags.",
+	)
 }
 
 func loadConfig(path string) (*config.Config, error) {

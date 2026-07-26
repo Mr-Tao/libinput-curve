@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -140,6 +142,82 @@ func TestMutationLockIsExclusive(t *testing.T) {
 	if second, err := app.acquireMutationLock(); err == nil {
 		second.Close()
 		t.Fatal("second writer acquired the same lock")
+	}
+}
+
+func TestCompletionCommand(t *testing.T) {
+	expectedMarkers := map[string][]string{
+		"bash": {"complete -F _libinput_curve", "--motion-scale", "render-xorg"},
+		"zsh":  {"#compdef libinput-curve", "--motion-scale", "render-xorg"},
+		"fish": {"complete -c libinput-curve", "-l motion-scale", "render-xorg"},
+	}
+
+	for shell, markers := range expectedMarkers {
+		t.Run(shell, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			app := testApplication(&stdout, &stderr, newStateRunner())
+			if code := app.run([]string{"completion", shell}); code != exitOK {
+				t.Fatalf("completion exit=%d stderr=%s", code, stderr.String())
+			}
+			for _, marker := range markers {
+				if !strings.Contains(stdout.String(), marker) {
+					t.Errorf("completion output does not contain %q", marker)
+				}
+			}
+			for _, command := range completionCommands {
+				if !strings.Contains(stdout.String(), command.name) {
+					t.Errorf("completion output does not contain command %q", command.name)
+				}
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("unexpected stderr: %s", stderr.String())
+			}
+		})
+	}
+
+	var stdout, stderr bytes.Buffer
+	app := testApplication(&stdout, &stderr, newStateRunner())
+	if code := app.run([]string{"completion", "tcsh"}); code != exitUsage {
+		t.Fatalf("unsupported shell exit=%d, want %d", code, exitUsage)
+	}
+	if !strings.Contains(stderr.String(), "expected bash, zsh, or fish") {
+		t.Fatalf("unexpected error: %s", stderr.String())
+	}
+}
+
+func TestCompletionSpecsMatchCommandFlags(t *testing.T) {
+	flagPattern := regexp.MustCompile(`(?m)^  -([a-z][a-z0-9-]*)`)
+
+	for _, command := range completionCommands {
+		if len(command.options) == 0 {
+			continue
+		}
+		t.Run(command.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			app := testApplication(&stdout, &stderr, newStateRunner())
+			if code := app.run([]string{command.name, "-h"}); code != exitUsage {
+				t.Fatalf("help exit=%d, want %d", code, exitUsage)
+			}
+
+			var actual []string
+			for _, match := range flagPattern.FindAllStringSubmatch(stderr.String(), -1) {
+				actual = append(actual, match[1])
+			}
+			var declared []string
+			for _, option := range command.options {
+				declared = append(declared, option.name)
+			}
+			slices.Sort(actual)
+			slices.Sort(declared)
+			if !slices.Equal(actual, declared) {
+				t.Fatalf(
+					"completion flags do not match parser flags:\n actual: %v\ndeclared: %v\nhelp:\n%s",
+					actual,
+					declared,
+					stderr.String(),
+				)
+			}
+		})
 	}
 }
 

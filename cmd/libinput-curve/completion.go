@@ -1,0 +1,485 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+package main
+
+import (
+	"fmt"
+	"io"
+	"strings"
+)
+
+type completionValueKind string
+
+const (
+	completionValueNone     completionValueKind = ""
+	completionValueCommand  completionValueKind = "command"
+	completionValueDuration completionValueKind = "duration"
+	completionValueEnum     completionValueKind = "enum"
+	completionValueFile     completionValueKind = "file"
+	completionValueNumber   completionValueKind = "number"
+)
+
+type completionOption struct {
+	name        string
+	description string
+	valueKind   completionValueKind
+	values      []string
+}
+
+type completionCommand struct {
+	name             string
+	description      string
+	options          []completionOption
+	positionalValues []string
+}
+
+var completionCommands = []completionCommand{
+	{
+		name:        "validate",
+		description: "Validate a strict JSON configuration",
+		options: []completionOption{
+			configCompletionOption(),
+		},
+	},
+	{
+		name:        "devices",
+		description: "List Xorg libinput pointer devices",
+		options: []completionOption{
+			formatCompletionOption(),
+			xinputCompletionOption(),
+			allowXWaylandCompletionOption("inspect Xwayland devices"),
+		},
+	},
+	{
+		name:        "plan",
+		description: "Show property changes without applying them",
+		options:     runtimeCompletionOptions(false),
+	},
+	{
+		name:        "status",
+		description: "Check whether matched devices are in sync",
+		options:     runtimeCompletionOptions(false),
+	},
+	{
+		name:        "apply",
+		description: "Apply a preflighted plan and verify the result",
+		options:     runtimeCompletionOptions(false),
+	},
+	{
+		name:        "watch",
+		description: "Reapply and verify profiles after XInput hotplug",
+		options:     runtimeCompletionOptions(true),
+	},
+	{
+		name:        "render-xorg",
+		description: "Render persistent xorg.conf.d InputClass sections",
+		options: []completionOption{
+			configCompletionOption(),
+			motionScaleCompletionOption(),
+			scrollScaleCompletionOption(),
+			{
+				name:        "output",
+				description: "output path or - for standard output",
+				valueKind:   completionValueFile,
+			},
+		},
+	},
+	{
+		name:        "version",
+		description: "Print the version",
+	},
+	{
+		name:             "completion",
+		description:      "Generate shell completion code",
+		positionalValues: []string{"bash", "zsh", "fish"},
+	},
+}
+
+func configCompletionOption() completionOption {
+	return completionOption{
+		name:        "config",
+		description: "configuration file",
+		valueKind:   completionValueFile,
+	}
+}
+
+func formatCompletionOption() completionOption {
+	return completionOption{
+		name:        "format",
+		description: "output format",
+		valueKind:   completionValueEnum,
+		values:      []string{"human", "json"},
+	}
+}
+
+func xinputCompletionOption() completionOption {
+	return completionOption{
+		name:        "xinput",
+		description: "xinput executable",
+		valueKind:   completionValueCommand,
+	}
+}
+
+func motionScaleCompletionOption() completionOption {
+	return completionOption{
+		name:        "motion-scale",
+		description: "runtime motion multiplier",
+		valueKind:   completionValueNumber,
+	}
+}
+
+func scrollScaleCompletionOption() completionOption {
+	return completionOption{
+		name:        "scroll-scale",
+		description: "runtime scroll multiplier",
+		valueKind:   completionValueNumber,
+	}
+}
+
+func allowXWaylandCompletionOption(description string) completionOption {
+	return completionOption{
+		name:        "allow-xwayland",
+		description: description,
+		valueKind:   completionValueNone,
+	}
+}
+
+func runtimeCompletionOptions(watch bool) []completionOption {
+	options := []completionOption{
+		configCompletionOption(),
+		formatCompletionOption(),
+		xinputCompletionOption(),
+		motionScaleCompletionOption(),
+		scrollScaleCompletionOption(),
+		allowXWaylandCompletionOption("allow Xwayland-only changes"),
+	}
+	if watch {
+		options = append(options, completionOption{
+			name:        "interval",
+			description: "poll interval",
+			valueKind:   completionValueDuration,
+		})
+	}
+	return options
+}
+
+func (app application) runCompletion(args []string) int {
+	if len(args) != 1 {
+		fmt.Fprintln(app.stderr, "usage: libinput-curve completion bash|zsh|fish")
+		return exitUsage
+	}
+	output, err := generateCompletion(args[0])
+	if err != nil {
+		fmt.Fprintln(app.stderr, err)
+		return exitUsage
+	}
+	if _, err := io.WriteString(app.stdout, output); err != nil {
+		fmt.Fprintln(app.stderr, err)
+		return exitIO
+	}
+	return exitOK
+}
+
+func generateCompletion(shell string) (string, error) {
+	switch shell {
+	case "bash":
+		return bashCompletion(), nil
+	case "zsh":
+		return zshCompletion(), nil
+	case "fish":
+		return fishCompletion(), nil
+	default:
+		return "", fmt.Errorf("unsupported shell %q: expected bash, zsh, or fish", shell)
+	}
+}
+
+func bashCompletion() string {
+	var output strings.Builder
+	output.WriteString(`# SPDX-License-Identifier: Apache-2.0 OR MIT
+# Generated by "libinput-curve completion bash"; do not edit.
+_libinput_curve() {
+  local cur prev command options
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+  command="${COMP_WORDS[1]}"
+
+  if (( COMP_CWORD == 1 )); then
+    COMPREPLY=( $(compgen -W '`)
+	output.WriteString(strings.Join(topLevelCompletionWords(), " "))
+	output.WriteString(`' -- "$cur") )
+    return
+  fi
+
+  case "$prev" in
+`)
+	for _, option := range uniqueCompletionOptions() {
+		switch option.valueKind {
+		case completionValueFile:
+			fmt.Fprintf(
+				&output,
+				"    --%s)\n      COMPREPLY=( $(compgen -f -- \"$cur\") )\n      return\n      ;;\n",
+				option.name,
+			)
+		case completionValueCommand:
+			fmt.Fprintf(
+				&output,
+				"    --%s)\n      COMPREPLY=( $(compgen -c -- \"$cur\") )\n      return\n      ;;\n",
+				option.name,
+			)
+		case completionValueEnum:
+			fmt.Fprintf(
+				&output,
+				"    --%s)\n      COMPREPLY=( $(compgen -W '%s' -- \"$cur\") )\n      return\n      ;;\n",
+				option.name,
+				strings.Join(option.values, " "),
+			)
+		case completionValueDuration, completionValueNumber:
+			fmt.Fprintf(&output, "    --%s)\n      return\n      ;;\n", option.name)
+		}
+	}
+	output.WriteString(`  esac
+
+  case "$command" in
+`)
+	for _, command := range completionCommands {
+		if len(command.positionalValues) > 0 {
+			fmt.Fprintf(
+				&output,
+				"    %s)\n      COMPREPLY=( $(compgen -W '%s' -- \"$cur\") )\n      return\n      ;;\n",
+				command.name,
+				strings.Join(command.positionalValues, " "),
+			)
+			continue
+		}
+		var options []string
+		for _, option := range command.options {
+			options = append(options, "--"+option.name)
+		}
+		if len(options) > 0 {
+			options = append(options, "-h", "--help")
+			fmt.Fprintf(
+				&output,
+				"    %s)\n      options='%s'\n      ;;\n",
+				command.name,
+				strings.Join(options, " "),
+			)
+		}
+	}
+	output.WriteString(`    *)
+      return
+      ;;
+  esac
+
+  if [[ "$cur" == -* ]]; then
+    COMPREPLY=( $(compgen -W "$options" -- "$cur") )
+  fi
+}
+
+complete -F _libinput_curve libinput-curve
+`)
+	return output.String()
+}
+
+func zshCompletion() string {
+	var output strings.Builder
+	output.WriteString(`#compdef libinput-curve
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+# Generated by "libinput-curve completion zsh"; do not edit.
+
+_libinput_curve() {
+  local context state state_descr line
+  typeset -A opt_args
+  local -a commands
+  commands=(
+`)
+	for _, command := range completionCommands {
+		fmt.Fprintf(
+			&output,
+			"    '%s:%s'\n",
+			command.name,
+			zshEscapeDescription(command.description),
+		)
+	}
+	output.WriteString(`    'help:Show help'
+  )
+
+  _arguments -C \
+    '(-h --help)-h[Show help]' \
+    '(-h --help)--help[Show help]' \
+    '1:command:->command' \
+    '*::argument:->args'
+
+  case "$state" in
+    command)
+      _describe 'command' commands
+      ;;
+    args)
+      case "$words[2]" in
+`)
+	for _, command := range completionCommands {
+		fmt.Fprintf(&output, "        %s)\n", command.name)
+		var specs []string
+		if len(command.options) > 0 {
+			specs = append(
+				specs,
+				"'(-h --help)-h[Show help]'",
+				"'(-h --help)--help[Show help]'",
+			)
+		}
+		for _, option := range command.options {
+			specs = append(specs, zshOptionSpec(option))
+		}
+		if len(command.positionalValues) > 0 {
+			specs = append(
+				specs,
+				fmt.Sprintf(
+					"'1:shell:(%s)'",
+					strings.Join(command.positionalValues, " "),
+				),
+			)
+		}
+		if len(specs) == 0 {
+			output.WriteString("          _message 'no more arguments'\n")
+		} else {
+			output.WriteString("          _arguments")
+			for _, spec := range specs {
+				output.WriteString(" \\\n            ")
+				output.WriteString(spec)
+			}
+			output.WriteString("\n")
+		}
+		output.WriteString("          ;;\n")
+	}
+	output.WriteString(`        *)
+          _message 'no more arguments'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_libinput_curve "$@"
+`)
+	return output.String()
+}
+
+func zshOptionSpec(option completionOption) string {
+	description := zshEscapeDescription(option.description)
+	prefix := fmt.Sprintf("'--%s=[%s]", option.name, description)
+	switch option.valueKind {
+	case completionValueCommand:
+		return prefix + ":executable:_command_names'"
+	case completionValueDuration:
+		return prefix + ":duration:'"
+	case completionValueEnum:
+		return prefix + ":value:(" + strings.Join(option.values, " ") + ")'"
+	case completionValueFile:
+		return prefix + ":file:_files'"
+	case completionValueNumber:
+		return prefix + ":number:'"
+	default:
+		return fmt.Sprintf("'--%s[%s]'", option.name, description)
+	}
+}
+
+func zshEscapeDescription(description string) string {
+	replacer := strings.NewReplacer(
+		`'`, `'\''`,
+		"[", `\[`,
+		"]", `\]`,
+		":", `\:`,
+	)
+	return replacer.Replace(description)
+}
+
+func fishCompletion() string {
+	var output strings.Builder
+	output.WriteString(`# SPDX-License-Identifier: Apache-2.0 OR MIT
+# Generated by "libinput-curve completion fish"; do not edit.
+complete -c libinput-curve -f
+complete -c libinput-curve -n __fish_use_subcommand -s h -l help -d 'Show help'
+`)
+	for _, command := range completionCommands {
+		fmt.Fprintf(
+			&output,
+			"complete -c libinput-curve -n __fish_use_subcommand -a %s -d %s\n",
+			fishQuote(command.name),
+			fishQuote(command.description),
+		)
+	}
+	output.WriteString(
+		"complete -c libinput-curve -n __fish_use_subcommand -a help -d 'Show help'\n",
+	)
+	for _, command := range completionCommands {
+		condition := fishQuote("__fish_seen_subcommand_from " + command.name)
+		if len(command.options) > 0 {
+			fmt.Fprintf(
+				&output,
+				"complete -c libinput-curve -n %s -s h -l help -d 'Show help'\n",
+				condition,
+			)
+		}
+		for _, option := range command.options {
+			fmt.Fprintf(
+				&output,
+				"complete -c libinput-curve -n %s -l %s%s -d %s\n",
+				condition,
+				option.name,
+				fishOptionArguments(option),
+				fishQuote(option.description),
+			)
+		}
+		if len(command.positionalValues) > 0 {
+			fmt.Fprintf(
+				&output,
+				"complete -c libinput-curve -n %s -x -a %s\n",
+				condition,
+				fishQuote(strings.Join(command.positionalValues, " ")),
+			)
+		}
+	}
+	return output.String()
+}
+
+func fishOptionArguments(option completionOption) string {
+	switch option.valueKind {
+	case completionValueCommand:
+		return " -x -a '(__fish_complete_command)'"
+	case completionValueEnum:
+		return " -x -a " + fishQuote(strings.Join(option.values, " "))
+	case completionValueFile:
+		return " -r -F"
+	case completionValueDuration, completionValueNumber:
+		return " -x"
+	default:
+		return ""
+	}
+}
+
+func fishQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `\'`) + "'"
+}
+
+func topLevelCompletionWords() []string {
+	words := make([]string, 0, len(completionCommands)+3)
+	for _, command := range completionCommands {
+		words = append(words, command.name)
+	}
+	return append(words, "help", "-h", "--help")
+}
+
+func uniqueCompletionOptions() []completionOption {
+	seen := make(map[string]bool)
+	var options []completionOption
+	for _, command := range completionCommands {
+		for _, option := range command.options {
+			if seen[option.name] {
+				continue
+			}
+			seen[option.name] = true
+			options = append(options, option)
+		}
+	}
+	return options
+}

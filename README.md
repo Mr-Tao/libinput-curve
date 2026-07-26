@@ -7,8 +7,9 @@ libinput acceleration curves. It focuses on the configuration gap between
 libinput's low-level custom profile API and the practical Xorg interfaces
 exposed by `xf86-input-libinput`.
 
-The project is in early development. The JSON schema and command names may
-change before the first stable release.
+The project is pre-1.0. The versioned JSON schema is stable within its current
+major version, but command-line details may still evolve between minor
+releases.
 
 ## What it does
 
@@ -55,12 +56,45 @@ Requirements:
   `xf86-input-libinput` for custom profiles.
 
 ```console
-$ go build -o libinput-curve ./cmd/libinput-curve
+$ make build
 $ ./libinput-curve version
 0.1.0-dev
 ```
 
 The binary has no external Go dependencies.
+
+Release builds inject their version through the existing
+`-X main.version=...` linker flag. To build a versioned binary locally:
+
+```console
+$ make build VERSION=0.1.0
+```
+
+Generating the man page additionally requires `scdoc`. The complete
+documentation check also validates generated Bash, Zsh, and Fish completions:
+
+```console
+$ make man
+$ make docs-check
+```
+
+`make man` converts `docs/man/libinput-curve.1.scd` to
+`build/man/libinput-curve.1`. Generated documentation is intentionally not
+committed.
+
+## Shell completion
+
+The `completion` command generates definitions for Bash, Zsh, and Fish:
+
+```console
+$ libinput-curve completion bash
+$ libinput-curve completion zsh
+$ libinput-curve completion fish
+```
+
+Release archives install them under the conventional `share/` paths for each
+shell. Distribution packages can generate the same files from the packaged
+binary without carrying pre-generated sources.
 
 ## Configuration
 
@@ -188,6 +222,28 @@ matches. Generated files use `MatchDriver`, `MatchIsPointer`, `MatchUSBID`,
 optional `MatchProduct`, `AccelProfile`, and the corresponding custom curve
 options. They take effect when Xorg creates the device, normally at the next
 login or server restart.
+
+## Releases
+
+Tag-triggered releases provide a statically linked Linux amd64 archive
+containing the binary, generated man page and completions, documentation,
+systemd user unit, examples, and licenses. Linux arm64 is compile-checked in
+CI only; this is not a claim of runtime support.
+
+Verify the downloaded archive with `SHA256SUMS`, then verify its GitHub build
+provenance:
+
+```console
+$ sha256sum -c SHA256SUMS
+$ gh attestation verify libinput-curve-0.1.0-linux-amd64.tar.gz \
+    -R Mr-Tao/libinput-curve
+```
+
+Maintainers can reproduce the archive locally with `scdoc`, GNU tar, and:
+
+```console
+$ make release VERSION=0.1.0
+```
 
 ## Related projects
 

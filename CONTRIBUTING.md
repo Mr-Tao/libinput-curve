@@ -12,15 +12,20 @@ or claims that an independent libinput context configures Wayland.
 ## Development
 
 ```console
-$ gofmt -w cmd internal
-$ go vet ./...
-$ go test -race ./...
-$ go build ./cmd/libinput-curve
+$ make check
+$ make test
+$ make docs-check
+$ make shellcheck
+$ make build
 ```
 
 New parsing, planning, matching, or rendering behavior needs table-driven
 tests. Backend code must be testable with a fake command runner and must pass
 arguments directly rather than constructing a shell command.
+
+`make docs-check` requires `scdoc`, `groff`, Bash, Zsh, and Fish. The complete
+validation set is available as `make check-all`. Generated man pages and
+completions are build artifacts and must not be committed.
 
 For a live test:
 

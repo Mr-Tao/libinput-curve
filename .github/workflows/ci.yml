@@ -9,20 +9,49 @@ on:
 permissions:
   contents: read
 
+env:
+  GOCACHE: /tmp/libinput-curve-go-build
+  GOMODCACHE: /tmp/libinput-curve-go-mod
+  GOFLAGS: -mod=readonly
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: false
-      - name: Check formatting
-        run: test -z "$(gofmt -l cmd internal)"
-      - name: Vet
-        run: go vet ./...
-      - name: Test
-        run: go test -race ./...
-      - name: Build
-        run: go build ./cmd/libinput-curve
+      - name: Install documentation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends \
+            fish groff scdoc shellcheck zsh
+      - name: Run complete validation
+        run: make check-all
+      - name: Build amd64 development binary
+        run: make build
+
+  arm64-compile:
+    name: Linux arm64 compile-only
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CGO_ENABLED: "0"
+      GOOS: linux
+      GOARCH: arm64
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Compile without publishing a runtime artifact
+        run: |
+          go build \
+            -trimpath \
+            -ldflags="-X main.version=ci-arm64-compile-only" \
+            -o /tmp/libinput-curve-linux-arm64 \
+            ./cmd/libinput-curve
