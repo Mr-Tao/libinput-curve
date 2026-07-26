@@ -1,36 +1,21 @@
 # Maintainer: Mr. Tao <tao@post.cz>
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 
-pkgname=libinput-curve-git
-pkgver=0.1.0.r0.g8093b59
+pkgname=libinput-curve
+pkgver=0.1.0
 pkgrel=1
 pkgdesc='Plan, apply, and persist custom libinput curves under Xorg'
 arch=('x86_64')
 url='https://github.com/Mr-Tao/libinput-curve'
 license=('Apache-2.0 OR MIT')
 depends=('glibc' 'xf86-input-libinput' 'xorg-xinput')
-makedepends=('git' 'go' 'scdoc')
+makedepends=('go' 'scdoc')
 optdepends=('systemd: optional X11-session watcher')
-provides=("libinput-curve=$pkgver")
-conflicts=('libinput-curve')
-source=("$pkgname::git+$url.git")
-b2sums=('SKIP')
-
-pkgver() {
-  cd "$pkgname"
-
-  if git describe --long --tags --abbrev=7 --match 'v[0-9]*' >/dev/null 2>&1; then
-    git describe --long --tags --abbrev=7 --match 'v[0-9]*' |
-      sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
-  else
-    printf '0.1.0.r%s.g%s' \
-      "$(git rev-list --count HEAD)" \
-      "$(git rev-parse --short=7 HEAD)"
-  fi
-}
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+b2sums=('956ac9f24a33e1750104a8c2a3b809c4f52074bf9c3aaa8bbf03ab89d8794bac31bab32be72a6c1ed2f5175721a70eb5116f5e83bcedbf6b58e215ce1c0e839a')
 
 build() {
-  cd "$pkgname"
+  cd "$pkgname-$pkgver"
 
   export CGO_CPPFLAGS="${CPPFLAGS}"
   export CGO_CFLAGS="${CFLAGS}"
@@ -54,7 +39,7 @@ build() {
 }
 
 check() {
-  cd "$pkgname"
+  cd "$pkgname-$pkgver"
 
   export GOCACHE="$srcdir/go-build-cache"
   export GOMODCACHE="$srcdir/go-mod-cache"
@@ -64,7 +49,7 @@ check() {
 }
 
 package() {
-  cd "$pkgname"
+  cd "$pkgname-$pkgver"
 
   install -Dm0755 libinput-curve \
     "$pkgdir/usr/bin/libinput-curve"
